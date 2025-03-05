@@ -1,0 +1,1057 @@
+import sys  # Provides access to system-specific parameters and functions.
+import os  # Allows interaction with the operating system, such as file handling.
+import hashlib  # Used for hashing algorithms, critical for secure password handling.
+from PyQt6.QtWidgets import (  # Importing necessary widgets and layout classes from PyQt6 for GUI.
+    QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton,
+    QTableWidget, QTableWidgetItem, QMessageBox, QCalendarWidget, QComboBox, QStackedWidget, QHeaderView, QCheckBox, QDialog, QCompleter, QInputDialog
+)
+from PyQt6.QtCore import Qt, QStringListModel # Core PyQt6 modules for application settings and data models.
+from PyQt6.QtGui import QShortcut, QKeySequence, QIcon # GUI modules for keyboard shortcuts and icons.
+from datetime import datetime  # Module for handling date and time operations.
+import re  # Module for regular expressions, used for string pattern matching.
+
+# File paths for storing user data, archived tasks, and other information.
+USER_DATA_FILE = "users.txt" # File to store registered user's credentials
+REMEMBER_ME_FILE = "remember_me.txt" # File to store 'remember me' credentials.
+TASK_FILE_SUFFIX = "_tasks.txt" # File to store registered user's data/tasks
+ARCHIVE_FILE_SUFFIX = "_archive.txt" # File to store registered user's deleted data/tasks
+CATEGORIES_FILE_SUFFIX = "_categories.txt" # File to store registered user's saved categories
+
+# Function to get the file path for a user's archived tasks.
+def get_user_archive_file(username):
+    return f"{username}{ARCHIVE_FILE_SUFFIX}"
+    
+# Function to get the file path for a user's categories.
+def get_user_categories_file(username):
+    return f"{username}{CATEGORIES_FILE_SUFFIX}"
+
+# Class representing the login page of the application.
+class LoginPage(QWidget):
+    def __init__(self, stacked_widget):
+        super().__init__()
+        self.stacked_widget = stacked_widget
+        self.init_ui()
+        
+    def init_ui(self):
+        self.setWindowTitle("Login")  # Set the window title.
+        self.resize(450, 600)  # Resize the window.
+
+        layout = QVBoxLayout()  # Create a vertical layout for the main layout.
+        title_label = QLabel("TaskMaster")  # Create a label for the application title.
+        title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)  # Center-align the title label.
+        title_label.setStyleSheet("""
+            font-size: 24px; 
+            font-weight: bold; 
+            padding: 20px;
+            background: qlineargradient(
+                spread: pad, x1: 0, y1: 0, x2: 1, y2: 1,
+                stop: 0 #000000, stop: 1 #000000
+            );
+            color: white;
+        """)  # Apply a style sheet to the title label for visual appearance.
+
+        form_layout = QVBoxLayout()  # Create a vertical layout for the login form.
+        form_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)  # Center-align the form layout.
+
+        self.username_entry = QLineEdit()  # Create a line edit widget for username input.
+        self.username_entry.setPlaceholderText("Username")  # Set placeholder text for the username field.
+        self.username_entry.setStyleSheet(""" 
+            font-size: 16px; 
+            font-weight: bold; 
+            padding: 10px;
+            background: qlineargradient(
+                spread: pad, x1: 0, y1: 0, x2: 1, y2: 1,
+                stop: 0 #000000, stop: 1 #000000
+            );
+            border-radius: 10px;
+            border: 1px solid #ccc;
+            color: white;
+        """) # Apply styles to the username input field.
+
+        password_layout = QHBoxLayout()  # Create a horizontal layout for the password field and show/hide button.
+        self.password_entry = QLineEdit()  # Create a line edit widget for password input.
+        self.password_entry.setPlaceholderText("Password")  # Set placeholder text for the password field.
+        self.password_entry.setEchoMode(QLineEdit.EchoMode.Password)  # Set echo mode to hide the password input.
+        self.password_entry.setStyleSheet("""
+            font-size: 16px; 
+            font-weight: bold; 
+            padding: 10px;
+            background: qlineargradient(
+                spread: pad, x1: 0, y1: 0, x2: 1, y2: 1,
+                stop: 0 #000000, stop: 1 #000000
+            );
+            border-radius: 10px;
+            border: 1px solid #ccc;
+            color: white;
+        """) # Apply styling to the password input field.
+
+        self.show_password_button = QPushButton()  # Create a button to toggle password visibility.
+        self.show_password_button.setIcon(QIcon("eye-icon.png"))  # Set an icon for the toggle button.
+        self.show_password_button.setStyleSheet("""
+            background-color: transparent;
+            border: none;
+        """)  # Make the button background transparent and remove the border.
+        self.show_password_button.clicked.connect(self.toggle_password_visibility)  # Connect the button to the toggle visibility function.
+
+        password_layout.addWidget(self.password_entry)  # Add the password input to the password layout.
+        password_layout.addWidget(self.show_password_button)  # Add the toggle button to the password layout.
+
+        self.remember_me_checkbox = QCheckBox("Remember Me")  # Create a checkbox for the 'Remember Me' option.
+        self.remember_me_checkbox.setStyleSheet("font-size: 16px;")  # Apply styles to the checkbox.
+
+        login_button = QPushButton("Login")  # Create a login button.
+        login_button.setStyleSheet("padding: 10px; font-size: 16px; background-color: #28A745; color: white; border-radius: 10px;")  # Apply styling to the login button.
+        login_button.clicked.connect(self.login)  # Connect the login button to the login function.
+
+        register_button = QPushButton("Register")  # Create a register button.
+        register_button.setStyleSheet("padding: 10px; font-size: 16px; background-color: #007BFF; color: white; border-radius: 10px;")  # Apply styling to the register button.
+        register_button.clicked.connect(self.register)  # Connect the register button to the register function.
+
+        delete_user_button = QPushButton("Delete User") # Create a delete user button.
+        delete_user_button.setStyleSheet("padding: 10px; font-size: 16px; background-color: #DC3545; color: white; border-radius: 10px;") # Apply styles to the delete user button.
+        delete_user_button.clicked.connect(self.delete_user_prompt) # Connect the delete user button to the delete user prompt function.
+
+        change_username_button = QPushButton("Change User") # Create a change user button.
+        change_username_button.setStyleSheet("padding: 10px; font-size: 16px; background-color: #01BBE1; color: white; border-radius: 10px;") # Apply styles to the delete user button.
+        change_username_button.clicked.connect(self.change_username_prompt) # Connect the change user button to the change user prompt function.
+
+        user_management_layout = QHBoxLayout() # Creates a QHBoxLayout object and assigns it to the variable 'user_management_layout'. This layout arranges widgets horizontally.
+        user_management_layout.addWidget(delete_user_button) # Adds the 'delete_user_button' widget to the 'user_management_layout' in the horizontal layout.
+        user_management_layout.addWidget(change_username_button) # Adds the 'change_username_button' widget to the 'user_management_layout', placing it next to the 'delete_user_button' in the horizontal layout.
+
+        # Add the username and password fields, checkbox, and buttons to the form layout.
+        form_layout.addWidget(self.username_entry)  # Add the username text entry widget to the form layout.
+        form_layout.addLayout(password_layout)  # Add the layout containing the password fields to the form layout.
+        form_layout.addWidget(self.remember_me_checkbox)  # Add the checkbox for "Remember Me" option to the form layout.
+        form_layout.addWidget(login_button)  # Add the login button to the form layout.
+        form_layout.addWidget(register_button)  # Add the register button to the form layout.
+        form_layout.addLayout(user_management_layout)  # Add the delete user button and change user button adjacent to eachto the form layout.
+
+        # Add the title label and form layout to the main layout.
+        layout.addWidget(title_label)  # Add the title label to the main layout.
+        layout.addLayout(form_layout)  # Add the form layout (which contains all form elements) to the main layout.
+
+        self.setLayout(layout)  # Set the main layout for the login page.
+
+        # Connect the Enter key press on username and password fields to trigger the login button.
+        self.username_entry.returnPressed.connect(login_button.click)  # When Enter key is pressed in username entry, trigger the login button's click event.
+        self.password_entry.returnPressed.connect(login_button.click)  # When Enter key is pressed in password entry, trigger the login button's click event.
+
+        # Load previously remembered credentials, if any.
+        self.load_remembered_credentials()  # Call method to load any saved username and password from previous sessions.
+
+
+    def toggle_password_visibility(self):
+        # Toggle the password visibility between visible and hidden.
+        if self.password_entry.echoMode() == QLineEdit.EchoMode.Password:
+            self.password_entry.setEchoMode(QLineEdit.EchoMode.Normal)  # Show the password.
+            self.show_password_button.setIcon(QIcon("eye-icon.png"))  # Change the button icon to indicate visibility.
+        else:
+            self.password_entry.setEchoMode(QLineEdit.EchoMode.Password)  # Hide the password.
+            self.show_password_button.setIcon(QIcon("eye-off-icon.png"))  # Change the button icon to indicate hidden mode.
+
+
+    def is_valid_password(self, password):
+        # Defines a method to check if the provided password meets certain criteria.
+
+        pattern = r'^(?=.*[A-Z])(?=.*[a-z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=\[\]{};\':"\\|,.<>/?])[\w!@#$%^&*()_+\-=\[\]{};\':"\\|,.<>/?]{8,}$'
+        # Defines a regular expression pattern to enforce the password rules:
+        # - At least one uppercase letter
+        # - At least one lowercase letter
+        # - At least one digit
+        # - At least one special character
+        # - Minimum length of 8 characters
+
+        return re.match(pattern, password) is not None
+        # Returns True if the password matches the pattern (is valid), otherwise returns False.
+
+
+    def login(self):
+        username = self.username_entry.text().strip()  # Get the entered username, removing any leading/trailing spaces.
+        password = self.password_entry.text().strip()  # Get the entered password, removing any leading/trailing spaces.
+        # Validate the login credentials.
+        if self.validate_username(username) and self.is_valid_password(password) and self.validate_login(username, password):
+            if self.remember_me_checkbox.isChecked():  # Check if 'Remember Me' is selected.
+                self.remember_credentials(username.lower(), password)  # Remember the user's credentials.
+            else:
+                self.forget_credentials()  # Forget the user's credentials.
+            QMessageBox.information(self, "Success", "Login successful!")  # Show a success message.
+            self.stacked_widget.setCurrentIndex(1)  # Switch to the next page (to-do list page).
+            self.stacked_widget.widget(1).load_tasks(username.lower())  # Load tasks associated with the user.
+        else:
+            QMessageBox.warning(self, "Error", "Invalid username or password!")  # Show an error message if login fails.
+
+
+    def register(self):
+        # Get the entered username, removing any leading/trailing spaces.
+        username = self.username_entry.text().strip()  
+        # Get the entered password, removing any leading/trailing spaces.
+        password = self.password_entry.text().strip()  
+        # Check if the username contains any uppercase letters.
+        if not username.islower():  
+            # If username has uppercase letters, show an error message and exit the function.
+            QMessageBox.warning(self, "Error", "Username must be lowercase.")
+            return  # Exit the function early.
+        # Validate the registration details.
+        if not self.validate_username(username):  
+            # If the username is invalid (doesn't meet criteria), show an error message.
+            QMessageBox.warning(self, "Error", "Username must contain only letters and be at least 4 characters long.")
+            return  # Exit the function early.
+        # Check if the password meets the security criteria (length, mix of character types).
+        if not self.is_valid_password(password):  
+            # If password doesn't meet criteria, show an error message.
+            QMessageBox.warning(self, "Error", "Password must be at least 8 characters long and include a mix of uppercase letters, lowercase letters, numbers, and symbols.")
+            return  # Exit the function early.
+        # Validate the registration (e.g., check if username is available).
+        if self.validate_registration(username, password):  
+            # If registration is successful, show a success message.
+            QMessageBox.information(self, "Success", "Registration successful!")
+        else:
+            # If the username is already taken, show an error message.
+            QMessageBox.warning(self, "Error", "Username already taken. Please try another one.")
+
+
+    def delete_user_prompt(self):
+        # Get the entered username, removing any leading/trailing spaces.
+        username = self.username_entry.text().strip()  
+        # Get the entered password, removing any leading/trailing spaces.
+        password = self.password_entry.text().strip()  
+        # Check if both username and password fields are not empty.
+        if not username or not password:  
+            # If either is empty, show an error message and exit the function.
+            QMessageBox.warning(self, "Error", "Type the username and password to delete")
+            return  # Exit the function early.
+        # Validate the login credentials to ensure the user exists and the password is correct.
+        if not self.validate_login(username, password):  
+            # If credentials are invalid, show an error message and exit the function.
+            QMessageBox.warning(self, "Error", "Invalid username or password")
+            return  # Exit the function early.
+
+        # Prompt the user with a confirmation dialog to confirm user deletion.
+
+        confirm_box = QMessageBox(self)
+        # Creates a QMessageBox instance for displaying a confirmation dialog to the user.
+        confirm_box.setWindowTitle("Confirm Deletion")
+        # Sets the title of the confirmation dialog to "Confirm Deletion".
+        confirm_box.setText(f"Are you sure you want to delete the user '{username}'?")
+        # Sets the main text of the dialog, asking the user to confirm the deletion of the specified username.
+        yes_button = confirm_box.addButton("Yes", QMessageBox.ButtonRole.YesRole)
+        # Adds a "Yes" button to the confirmation dialog, assigning it the role of 'YesRole'.
+        no_button = confirm_box.addButton("No", QMessageBox.ButtonRole.NoRole)
+        # Adds a "No" button to the confirmation dialog, assigning it the role of 'NoRole'.
+        confirm_box.setDefaultButton(yes_button)  # Set "Yes" as the default button
+        # Sets the "Yes" button as the default selection when the dialog is shown.
+        confirm_box.setEscapeButton(no_button)   # Set "No" as the escape button
+        # Sets the "No" button as the escape option, which is triggered when the user presses the escape key.
+        confirm_box.exec()
+        # Executes the confirmation dialog, displaying it to the user and waiting for a response.
+
+        # Check if the user clicked 'Yes' in the confirmation dialog.
+        if confirm_box.clickedButton() == yes_button:
+            # If 'Yes' is clicked, proceed to delete the user.
+            self.delete_user(username)  
+            # Show a success message indicating the user has been deleted.
+            QMessageBox.information(self, "Success", f"User '{username}' has been deleted.")
+        else:
+            # If 'No' is clicked, show a message indicating the deletion was cancelled.
+            QMessageBox.information(self, "Cancelled", "User deletion cancelled.")
+
+
+    def validate_username(self, username):
+        # Ensure the username is valid: contains only letters and is at least 4 characters long.
+        return len(username) >= 4 and username.isalpha() and username.islower()
+
+
+    def delete_user(self, username):
+        # Convert the username to lowercase to ensure case-insensitive matching.
+        username = username.lower()
+        # Remove the user from the user data file (USER_DATA_FILE).
+        with open(USER_DATA_FILE, "r") as f:
+            lines = f.readlines()  # Read all lines from the user data file.
+        with open(USER_DATA_FILE, "w") as f:
+            # Write back only the lines that do not start with the username.
+            for line in lines:
+                if not line.startswith(f"{username},"):
+                    f.write(line)
+        # Construct the task file name for the user.
+        task_file = f"{username}_tasks.txt"
+        # If the task file exists, delete it.
+        if os.path.exists(task_file):
+            os.remove(task_file)
+        # Get the archive file name for the user.
+        archive_file = get_user_archive_file(username)
+        # If the archive file exists, delete it.
+        if os.path.exists(archive_file):
+            os.remove(archive_file)
+        # Get the categories file name for the user.
+        categories_file = get_user_categories_file(username)
+        # If the categories file exists, delete it.
+        if os.path.exists(categories_file):
+            os.remove(categories_file)
+        # Check if the 'remember me' file exists.
+        if os.path.exists(REMEMBER_ME_FILE):
+            with open(REMEMBER_ME_FILE, "r") as f:
+                content = f.read().strip()  # Read and strip any whitespace from the content.
+            if content:
+                # Split the remembered credentials into username and password.
+                remembered_username, _ = content.split(",")
+                # If the remembered username matches the one being deleted, remove the 'remember me' file.
+                if remembered_username.lower() == username:
+                    os.remove(REMEMBER_ME_FILE)
+        # Clear the username input field.
+        self.username_entry.clear()
+        # Clear the password input field.
+        self.password_entry.clear()
+        # If the "Remember Me" checkbox exists, uncheck it.
+        if hasattr(self, 'remember_me_checkbox'):
+            self.remember_me_checkbox.setChecked(False)
+        # Clear any stored credentials.
+        self.forget_credentials()
+
+
+    def change_username_prompt(self):
+        # Defines a method that prompts the user to change their username.
+        username = self.username_entry.text().strip()
+        # Retrieves the current username entered by the user, removing any leading or trailing whitespace.
+        password = self.password_entry.text().strip()
+        # Retrieves the current password entered by the user, removing any leading or trailing whitespace.
+
+        if not username or not password:
+            QMessageBox.warning(self, "Error", "Please enter your current username and password")
+            # If either the username or password is missing, display a warning message and stop the process.
+            return
+        if not self.validate_login(username, password):
+            QMessageBox.warning(self, "Error", "Invalid username or password")
+            # If the provided username and password are not valid, display a warning message and stop the process.
+            return
+        new_username, ok = QInputDialog.getText(self, "Change Username", "Enter new username:")
+        # Prompts the user to enter a new username in an input dialog, storing the result in 'new_username' and 'ok'.
+        if ok and new_username:
+            # If the user confirmed the input dialog and provided a new username, proceed with validation.
+            if not self.validate_username(new_username):
+                QMessageBox.warning(self, "Error", "Invalid username. Username must be lowercase, contain only letters, and be at least 4 characters long.")
+                # If the new username is invalid (doesn't meet criteria), display a warning message and stop the process.
+                return
+            if self.change_username(username, new_username):
+                QMessageBox.information(self, "Success", f"Username changed to {new_username}")
+                # If the username change is successful, display a success message.
+                self.username_entry.setText(new_username)
+                # Updates the username entry field to reflect the new username.
+            else:
+                QMessageBox.warning(self, "Error", "Failed to change username")
+                # If the username change fails, display a warning message.
+
+
+    def change_username(self, old_username, new_username):
+        # Defines a method to change the username from 'old_username' to 'new_username'.
+
+        old_username = old_username.lower()
+        # Converts the old username to lowercase to ensure case-insensitive comparison.
+        new_username = new_username.lower()
+        # Converts the new username to lowercase to ensure case-insensitive comparison.
+
+        # Check if the new username already exists
+        with open(USER_DATA_FILE, "r") as f:
+            # Opens the user data file in read mode to check for existing usernames.
+            for line in f:
+                existing_username, _ = line.strip().split(",")
+                # Iterates through each line in the file, splitting the line into the username and other data.
+                if existing_username.lower() == new_username:
+                    QMessageBox.warning(self, "Error", "Username already exists. Please choose a different username.")
+                    # If the new username already exists, display a warning message and stop the process.
+                    return False
+
+        # If the new username doesn't exist, proceed with the change
+
+        # Update USER_DATA_FILE
+        with open(USER_DATA_FILE, "r") as f:
+            lines = f.readlines()
+            # Reads all lines from the user data file.
+
+        with open(USER_DATA_FILE, "w") as f:
+            # Opens the user data file in write mode to update the contents.
+            for line in lines:
+                if line.startswith(f"{old_username},"):
+                    f.write(line.replace(f"{old_username},", f"{new_username},", 1))
+                    # Replaces the old username with the new one in the file, writing the updated line.
+                else:
+                    f.write(line)
+                    # Writes the line as is if it doesn't match the old username.
+
+        # Update remember.txt if it exists
+        if os.path.exists(REMEMBER_ME_FILE):
+            # Checks if the "remember me" file exists.
+            with open(REMEMBER_ME_FILE, "r") as f:
+                content = f.read().strip()
+                # Reads and strips any whitespace from the contents of the "remember me" file.
+            if content:
+                remembered_username, password_hash = content.split(",")
+                # Splits the file contents into the remembered username and password hash.
+                if remembered_username.lower() == old_username:
+                    with open(REMEMBER_ME_FILE, "w") as f:
+                        f.write(f"{new_username},{password_hash}")
+                        # If the remembered username matches the old username, update it to the new username in the file.
+
+        # Rename task file
+        old_task_file = f"{old_username}_tasks.txt"
+        # Constructs the old task file name based on the old username.
+        new_task_file = f"{new_username}_tasks.txt"
+        # Constructs the new task file name based on the new username.
+        if os.path.exists(old_task_file):
+            os.rename(old_task_file, new_task_file)
+            # If the old task file exists, rename it to the new task file name.
+
+        # Rename archive file
+        old_archive_file = get_user_archive_file(old_username)
+        # Retrieves the old archive file name using a helper function.
+        new_archive_file = get_user_archive_file(new_username)
+        # Retrieves the new archive file name using a helper function.
+        if os.path.exists(old_archive_file):
+            os.rename(old_archive_file, new_archive_file)
+            # If the old archive file exists, rename it to the new archive file name.
+
+        # Rename categories file
+        old_categories_file = get_user_categories_file(old_username)
+        # Retrieves the old categories file name using a helper function.
+        new_categories_file = get_user_categories_file(new_username)
+        # Retrieves the new categories file name using a helper function.
+        if os.path.exists(old_categories_file):
+            os.rename(old_categories_file, new_categories_file)
+            # If the old categories file exists, rename it to the new categories file name.
+        return True
+        # Returns True to indicate the username change was successful.
+
+
+    def validate_login(self, username, password):
+        # Check if the user data file exists.
+        if not os.path.exists(USER_DATA_FILE):
+            return False  # Return False if the file doesn't exist.
+        # Open the user data file for reading.
+        with open(USER_DATA_FILE, "r") as f:
+            # Loop through each line in the file.
+            for line in f:
+                # Split each line into the stored username and password hash.
+                stored_username, stored_password = line.strip().split(",")
+                # Compare the entered username (case-insensitive) and the hashed password.
+                if username == stored_username.lower() and self.hash_password(password) == stored_password:
+                    return True  # Return True if credentials match.
+        # Return False if no matching credentials are found.
+        return False
+
+
+    def validate_registration(self, username, password):
+        # Check if the user data file exists; if not, create it.
+        if not os.path.exists(USER_DATA_FILE):
+            with open(USER_DATA_FILE, "w") as f:
+                pass  # Create the file by opening it in write mode.
+        # Open the user data file for reading.
+        with open(USER_DATA_FILE, "r") as f:
+            # Loop through each line in the file.
+            for line in f:
+                # Split each line into the stored username and (ignore) password hash.
+                stored_username, _ = line.strip().split(",")
+                # If the entered username already exists, return False.
+                if username.lower() == stored_username.lower():
+                    return False
+        # Open the user data file in append mode to add the new user's credentials.
+        with open(USER_DATA_FILE, "a") as f:
+            # Write the lowercase username and hashed password to the file.
+            f.write(f"{username.lower()},{self.hash_password(password)}\n")
+        # Return True to indicate successful registration.
+        return True
+
+
+    def hash_password(self, password):
+        # Hash the password using SHA-256 for secure storage and return the hex digest.
+        return hashlib.sha256(password.encode()).hexdigest()
+
+
+    def remember_credentials(self, username, password):
+        # Open the 'remember me' file in write mode.
+        with open(REMEMBER_ME_FILE, "w") as f:
+            # Write the lowercase username and hashed password to the file for later use.
+            f.write(f"{username.lower()},{self.hash_password(password)}")
+
+
+    def forget_credentials(self):
+        # Check if the 'remember me' file exists.
+        if os.path.exists(REMEMBER_ME_FILE):
+            os.remove(REMEMBER_ME_FILE)  # Delete the file if it exists, clearing stored credentials.
+        # Clear the username input field.
+        self.username_entry.clear()
+        # Clear the password input field.
+        self.password_entry.clear()
+        # If the "Remember Me" checkbox exists, uncheck it.
+        if hasattr(self, 'remember_me_checkbox'):
+            self.remember_me_checkbox.setChecked(False)
+
+    def load_remembered_credentials(self):
+        try:
+            # Attempt to open and read the remembered credentials file.
+            with open(REMEMBER_ME_FILE, "r") as file:
+                # Open the 'remember me' file in read mode.
+                content = file.read().strip()
+                # Read the entire file content and remove any leading or trailing whitespace.
+                if content and "," in content:
+                    # Check if the content is not empty and contains a comma (indicating a valid format).
+                    username, password_hash = content.split(",")
+                    # Split the content into username and password hash based on the comma.
+                    self.username_entry.setText(username)
+                    # Set the username field in the UI with the remembered username.
+                    self.remember_me_checkbox.setChecked(True)
+                    # Check the 'Remember Me' checkbox to reflect that credentials are remembered.
+                else:
+                    # If the content is empty or incorrectly formatted.
+                    print("Remember me file is empty or incorrectly formatted")
+                    # Print an error message indicating the issue with the file content.
+        except FileNotFoundError:
+            # Handle the situation where the 'remember me' file does not exist.
+            print("Remember me file not found")
+            # Print an error message indicating that the file was not found.
+        except Exception as e:
+            # Handle any other exceptions that may occur.
+            print(f"Error loading remembered credentials: {e}")
+            # Print an error message with the details of the exception.
+
+
+# Class representing the Task table page and other features of the application.
+class ToDoApp(QWidget):
+    def __init__(self, stacked_widget):
+        super().__init__()
+        self.stacked_widget = stacked_widget  # Reference to the stacked widget for page switching
+        self.username = None  # Initialize username as None
+        self.tasks = []  # List to store tasks
+        self.last_deleted_task = None  # To keep track of the last deleted task for undo
+        self.archived_tasks = []  # List to store all archived tasks
+        self.init_ui()  # Call to initialize UI components
+        self.setup_table_editing()  # Set up table editing features
+
+
+    def setup_table_editing(self):
+        # Configure the table to allow editing and connect signal for cell changes
+        self.task_table.setEditTriggers(QTableWidget.EditTrigger.DoubleClicked | QTableWidget.EditTrigger.EditKeyPressed)  
+        # Allow editing by double-click or pressing the Edit key
+        self.task_table.cellChanged.connect(self.on_cell_changed)  # Connect cell change signal to handler
+
+
+    def on_cell_changed(self, row, column):
+        item = self.task_table.item(row, column)  # Retrieve the item (cell) from the table at the specified row and column
+        if item is None:  # If the item is None, meaning no item is present at the cell
+            return  # Exit the method since there is nothing to process
+
+        new_value = item.text().strip()  # Get the text from the item, removing any leading or trailing whitespace
+        old_value = self.tasks[row][column]  # Retrieve the old value from the tasks list at the specified row and column
+
+        if column == 0:  # If the column is 0 (Task column)
+            self.tasks[row] = (new_value,) + self.tasks[row][1:]  # Update the task description with the new value
+        elif column == 1:  # If the column is 1 (Date column)
+            try:
+                # Attempt to parse the new value as a date in the format "DD/MM/YYYY"
+                new_date = datetime.strptime(new_value, "%d/%m/%Y")
+                # If parsing is successful, update the task with the new date
+                self.tasks[row] = self.tasks[row][:1] + (new_value,) + self.tasks[row][2:]
+            except ValueError:
+                # If parsing fails (i.e., the date format is incorrect), show a warning message
+                QMessageBox.warning(self, "Invalid Date", "Please enter the date in dd/MM/yyyy format.")
+                item.setText(old_value)  # Reset the cell to the old value
+                return  # Exit the method to prevent further processing
+        elif column == 2:  # If the column is 2 (Category column)
+            self.tasks[row] = self.tasks[row][:2] + (new_value,) + self.tasks[row][3:]  # Update the task with the new category
+            self.save_category(new_value)  # Save the new category to the categories list
+        elif column == 3:  # If the column is 3 (Priority column)
+            valid_priorities = ["Low", "Medium", "High"]  # Define the list of valid priorities
+            new_priority = new_value.capitalize()  # Capitalize the new priority value to match valid priorities
+            if new_priority in valid_priorities:  # Check if the new priority is in the list of valid priorities
+                self.tasks[row] = self.tasks[row][:3] + (new_priority,)  # Update the task with the new priority
+                item.setText(new_priority)  # Set the cell text to the new priority
+            else:
+                # If the new priority is not valid, show a warning message
+                QMessageBox.warning(self, "Invalid Priority", "Please type 'Low', 'Medium', or 'High'.")
+                item.setText(old_value)  # Reset the cell to the old value
+
+        self.save_tasks()  # Save the updated list of tasks
+        self.load_categories()  # Reload categories to reflect any changes
+
+
+    def init_ui(self):
+        self.setWindowTitle("To-Do List")  # Set the window title
+        self.resize(400, 600)  # Set the window size
+
+        layout = QVBoxLayout()  # Create a vertical box layout for the main window
+
+        self.welcome_label = QLabel()  # Create a label for welcoming the user
+        self.welcome_label.setAlignment(Qt.AlignmentFlag.AlignCenter)  # Center-align the label
+        self.welcome_label.setStyleSheet("font-size: 18px; font-weight: bold;")  # Set the font style
+
+        self.task_table = QTableWidget(0, 4)  # Create a table widget with 0 rows and 4 columns for tasks
+        self.task_table.setHorizontalHeaderLabels(["Task", "Date", "Category", "Priority"])  # Set column headers
+        self.task_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)  # Stretch columns to fit the width
+        self.task_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)  # Select entire rows
+
+        add_task_button = QPushButton("Add Task")  # Button to add a new task
+        add_task_button.setStyleSheet("padding: 10px; font-size: 16px; background-color: #007BFF; color: white; border-radius: 10px;")  # Set button style
+        add_task_button.clicked.connect(self.add_task)  # Connect the button click to add_task method
+
+        delete_button = QPushButton("Delete Task")  # Button to delete a selected task
+        delete_button.setStyleSheet("padding: 10px; font-size: 16px; background-color: #DC3545; color: white; border-radius: 10px;")  # Set button style
+        delete_button.clicked.connect(self.delete_tasks)  # Connect the button click to delete_task method
+
+        category_layout = QHBoxLayout()  # Horizontal layout for category input
+        category_label = QLabel("Category:")  # Label for category input
+        self.category_entry = QLineEdit()  # Text entry for category input
+        category_layout.addWidget(category_label)  # Add label to layout
+        category_layout.addWidget(self.category_entry)  # Add text entry to layout
+
+        priority_layout = QHBoxLayout()  # Horizontal layout for priority input
+        priority_label = QLabel("Priority:")  # Label for priority input
+        self.priority_combo = QComboBox()  # Combo box for selecting priority
+        self.priority_combo.addItems(["High", "Medium", "Low"])  # Add priority options to combo box
+        priority_layout.addWidget(priority_label)  # Add label to layout
+        priority_layout.addWidget(self.priority_combo)  # Add combo box to layout
+
+        sort_layout = QHBoxLayout()  # Horizontal layout for sorting tasks
+        sort_label = QLabel("Sort by:")  # Label for sorting options
+        self.sort_combo = QComboBox()  # Combo box for sorting options
+        self.sort_combo.addItems(["Date", "Category", "Priority"])  # Add sort options to combo box
+        sort_button = QPushButton("Sort")  # Button to trigger sorting
+        sort_button.clicked.connect(self.sort_tasks)  # Connect the button click to sort_tasks method
+        sort_layout.addWidget(sort_label)  # Add label to layout
+        sort_layout.addWidget(self.sort_combo)  # Add combo box to layout
+        sort_layout.addWidget(sort_button)  # Add sort button to layout
+
+        logout_button = QPushButton("Logout")  # Button to log out
+        logout_button.setStyleSheet("padding: 10px; font-size: 16px; background-color: #6C757D; color: white; border-radius: 10px;")  # Set button style
+        logout_button.clicked.connect(self.logout)  # Connect the button click to logout method
+
+        undo_button = QPushButton("Undo Task") # Button to undo task
+        undo_button.setStyleSheet("padding: 10px; font-size: 16px; background-color: #007C08; color: white; border-radius: 10px;") # Set button style
+        undo_button.clicked.connect(self.undo_delete_task)  # Connect the button click to undo task method
+
+        # Create a horizontal layout for buttons
+        button_layout = QHBoxLayout()  # Initialize a horizontal box layout for placing the buttons in a row
+        button_layout.addWidget(add_task_button)  # Add the "Add Task" button to the button layout
+        button_layout.addWidget(delete_button)  # Add the "Delete" button to the button layout
+        button_layout.addWidget(undo_button)  # Add the "Undo" button to the button layout
+        button_layout.addWidget(logout_button)  # Add the "Logout" button to the button layout
+
+        layout.addWidget(self.welcome_label)  # Add the welcome label widget to the main vertical layout
+        layout.addWidget(self.task_table)  # Add the task table widget to the main vertical layout
+        layout.addLayout(sort_layout)  # Add the sort options layout to the main vertical layout
+        layout.addLayout(button_layout)  # Add the button layout to the main vertical layout
+
+        self.setLayout(layout)  # Set the main layout for the entire widget
+
+        undo_shortcut = QShortcut(QKeySequence("Ctrl+Z"), self)  # Create a keyboard shortcut for "Ctrl+Z" and assign it to the widget
+        undo_shortcut.activated.connect(self.undo_delete_task)  # Connect the "Ctrl+Z" shortcut activation to the undo_delete_task method
+
+        select_all_shortcut = QShortcut(QKeySequence("Ctrl+A"), self)  # Create a keyboard shortcut for "Ctrl+A" to select all tasks
+        select_all_shortcut.activated.connect(self.select_all_tasks)  # Connect the "Ctrl+A" shortcut activation to the select_all_tasks method
+
+        self.task_table.setSelectionMode(QTableWidget.SelectionMode.ExtendedSelection)  # Set the task table's selection mode to allow extended selection (e.g., multiple rows)
+        self.task_table.horizontalHeader().sectionClicked.connect(self.on_header_click) # Connects the table header click event to the 'on_header_click' method to enable column sorting.
+        self.sort_order = {}  # Dictionary to keep track of sort order for each column
+
+    def add_task(self):
+        dialog = TaskDialog(self)  # Create an instance of the TaskDialog, passing the current widget as the parent
+        categories = self.get_categories()  # Retrieve the list of existing categories
+        dialog.update_category_completer(categories)  # Update the category completer in the dialog with the list of categories
+
+        while True:  # Start a loop to repeatedly show the dialog until valid input is provided or the user cancels
+            if dialog.exec():  # Execute the dialog and check if the user clicked "Add" (dialog is accepted)
+                task_data = dialog.get_task_data()  # Retrieve the task data (task, date, category, priority) from the dialog
+                if not task_data[0] or not task_data[2]:  # Check if either the task or category fields are empty
+                    QMessageBox.warning(dialog, "Warning", "Please fill in both the task and category fields!")  # Show a warning message if either field is empty
+                    continue  # Loop again to allow the user to correct their input
+                self.tasks.append(task_data)  # Add the validated task data to the tasks list
+                self.update_task_table()  # Update the task table to reflect the new task
+                self.save_tasks()  # Save the updated task list to persistent storage
+                self.save_category(task_data[2])  # Save the new category (if it doesn't already exist) to persistent storage
+                self.load_categories()  # Reload the categories to ensure the UI is updated with any new categories
+                QMessageBox.information(self, "Success", "Task added successfully!")  # Show a success message indicating the task was added
+                break  # Exit the loop after successfully adding the task
+            else:
+                break  # Exit the loop if the user clicked "Cancel" (dialog is rejected)
+
+
+    def get_categories(self):
+        # Initialize an empty set to hold categories.
+        categories = set()
+        try:
+            # Attempt to open the user's categories file.
+            with open(get_user_categories_file(self.username), "r") as file:
+                # Read each line from the file, stripping whitespace, and add to the set.
+                categories = set(line.strip() for line in file)
+        except FileNotFoundError:
+            # If the file doesn't exist, simply pass (no categories are loaded from file).
+            pass
+        # Iterate over the tasks to extract categories from the third element in each task tuple.
+        for _, _, category, _ in self.tasks:
+            categories.add(category)  # Add the category from the task to the set.
+        # Get only the categories currently in use by tasks
+        return list(set(task[2] for task in self.tasks))
+
+    def get_used_categories(self):
+        # Create and return a set of categories currently in use by tasks, 
+        # which are stored as the third element (index 2) in each task tuple.
+        return set(task[2] for task in self.tasks)
+
+
+    def update_task_table(self):
+        self.task_table.cellChanged.disconnect(self.on_cell_changed)  # Temporarily disconnect the cellChanged signal to prevent triggering while updating
+        self.task_table.setRowCount(len(self.tasks))  # Set the row count of the table to match the number of tasks
+        for row, task_data in enumerate(self.tasks):  # Iterate through the tasks, updating each row of the table
+            if isinstance(task_data, tuple) and len(task_data) == 4:  # Ensure task data is a tuple of expected length
+                task, date, category, priority = task_data  # Unpack the tuple into task components
+            self.task_table.setItem(row, 0, QTableWidgetItem(task))  # Set the task description in the first column
+            self.task_table.setItem(row, 1, QTableWidgetItem(date))  # Set the date in the second column
+            self.task_table.setItem(row, 2, QTableWidgetItem(category))  # Set the category in the third column
+            self.task_table.setItem(row, 3, QTableWidgetItem(priority))  # Set the priority in the fourth column
+        self.task_table.cellChanged.connect(self.on_cell_changed)  # Reconnect the cellChanged signal after the table is updated
+
+
+    def delete_tasks(self):
+        selected_rows = sorted(set(item.row() for item in self.task_table.selectedItems()), reverse=True)  
+        # Get and sort the unique rows selected in the task table in reverse order
+        
+        if selected_rows:  # If any rows are selected
+            deleted_tasks = []  # Initialize a list to store deleted tasks
+            for row in selected_rows:  # Iterate through selected rows
+                task = self.tasks.pop(row)  # Remove the task from the list at the specified row
+                deleted_tasks.append(task)  # Add the removed task to the deleted_tasks list
+                self.archive_task(task)  # Archive the deleted task
+            self.archived_tasks.append(deleted_tasks)  # Append the deleted tasks to the archived tasks list for undo functionality
+            self.update_task_table()  # Refresh the task table to reflect deletions
+            self.save_tasks()  # Save the updated tasks to persistent storage
+            self.update_categories_file()  # Update the categories file after deletion
+            self.load_categories()  # Reload the categories to reflect any changes
+        else:
+            QMessageBox.warning(self, "Warning", "Please select task(s) to delete!")  # Show warning if no tasks are selected
+
+
+    def undo_delete_task(self):
+        archive_file = get_user_archive_file(self.username)  # Get the file path to the user's archive file
+        try:
+            with open(archive_file, "r") as file:  # Open the archive file in read mode
+                lines = file.readlines()  # Read all lines from the archive file
+            if lines:  # If there are any lines in the archive file
+                last_task = lines.pop()  # Remove the last line (last archived task)
+                _, task, date, category, priority = last_task.strip().split(",")  # Parse the task details from the line
+                self.tasks.append((task, date, category, priority))  # Add the task back to the task list
+                with open(archive_file, "w") as file:  # Reopen the archive file in write mode
+                    file.writelines(lines)  # Write the remaining lines back to the archive file
+                self.update_task_table()  # Update the task table to reflect the restored task
+                self.save_tasks()  # Save the updated task list
+                self.update_categories_file()  # Update the categories file to reflect restored categories
+                self.load_categories()  # Reload the categories in the UI
+            else:
+                QMessageBox.warning(self, "Warning", "No tasks deleted")  # Show warning if no tasks are in the archive file
+        except FileNotFoundError:
+            QMessageBox.warning(self, "Warning", "No tasks deleted")  # Show warning if the archive file doesn't exist
+
+
+    def select_all_tasks(self):
+        self.task_table.selectAll() # Select all tasks in the task table
+
+
+    def on_header_click(self, logical_index):
+        # Defines a method that is triggered when a header in the table is clicked. 
+        # The 'logical_index' parameter represents the index of the clicked header.
+
+        header_item = self.task_table.horizontalHeaderItem(logical_index)
+        # Retrieves the header item from the table's horizontal header using the provided 'logical_index'.
+        header_text = header_item.text()
+        # Extracts the text of the clicked header item, such as "Task", "Date", "Category", or "Priority".
+
+        # Toggle sort order
+        if header_text not in self.sort_order:
+            self.sort_order[header_text] = Qt.SortOrder.AscendingOrder
+            # If the header text is not in the 'sort_order' dictionary, set its sort order to ascending.
+        else:
+            self.sort_order[header_text] = Qt.SortOrder.DescendingOrder if self.sort_order[header_text] == Qt.SortOrder.AscendingOrder else Qt.SortOrder.AscendingOrder
+            # If the header text is already in the 'sort_order' dictionary, toggle the sort order between ascending and descending.
+
+        # Sort tasks
+        if header_text == "Task":
+            self.tasks.sort(key=lambda x: x[0], reverse=(self.sort_order[header_text] == Qt.SortOrder.DescendingOrder))
+            # If the clicked header is "Task", sort 'tasks' by the first element in each task tuple (task name), with order based on the current sort order.
+        elif header_text == "Date":
+            self.tasks.sort(key=lambda x: datetime.strptime(x[1], "%d/%m/%Y"), reverse=(self.sort_order[header_text] == Qt.SortOrder.DescendingOrder))
+            # If the clicked header is "Date", sort 'tasks' by the second element (date) after converting it to a datetime object.
+        elif header_text == "Category":
+            self.tasks.sort(key=lambda x: x[2], reverse=(self.sort_order[header_text] == Qt.SortOrder.DescendingOrder))
+            # If the clicked header is "Category", sort 'tasks' by the third element (category).
+        elif header_text == "Priority":
+            priority_order = {"High": 0, "Medium": 1, "Low": 2}
+            self.tasks.sort(key=lambda x: priority_order[x[3]], reverse=(self.sort_order[header_text] == Qt.SortOrder.DescendingOrder))
+            # If the clicked header is "Priority", sort 'tasks' by the fourth element (priority) based on the custom 'priority_order' mapping.
+
+        self.update_task_table()
+        # Calls the 'update_task_table' method to refresh the displayed task table with the newly sorted tasks.
+
+
+    def sort_tasks(self):
+        # Defines a method to sort tasks based on the selected option in a combo box.
+
+        sort_option = self.sort_combo.currentText()
+        # Retrieves the current text from the combo box, indicating the user's chosen sort option.
+
+        def priority_order(priority):
+            return ["High", "Medium", "Low"].index(priority)
+        # Defines a helper function 'priority_order' that returns the index of the given priority in the list ["High", "Medium", "Low"].
+
+        if sort_option == "Date":
+            self.tasks.sort(key=lambda x: (datetime.strptime(x[1], "%d/%m/%Y"), priority_order(x[3]), x[2]))
+            # If the sort option is "Date", sort 'tasks' by date first, then by priority, and finally by category.
+        elif sort_option == "Category":
+            self.tasks.sort(key=lambda x: (x[2], datetime.strptime(x[1], "%d/%m/%Y"), priority_order(x[3])))
+            # If the sort option is "Category", sort 'tasks' by category first, then by date, and finally by priority.
+        elif sort_option == "Priority":
+            self.tasks.sort(key=lambda x: (priority_order(x[3]), datetime.strptime(x[1], "%d/%m/%Y"), x[2]))
+            # If the sort option is "Priority", sort 'tasks' by priority first, then by date, and finally by category.
+
+        self.update_task_table()
+        # Calls the 'update_task_table' method to refresh the displayed task table with the newly sorted tasks.
+
+
+    def save_tasks(self):
+        # Method to save tasks to a file.
+        if self.username:
+            # Proceed if 'username' is set.
+            try:
+                with open(f"{self.username}{TASK_FILE_SUFFIX}", "w") as file:
+                    # Open a file named after the username in write mode.
+                    for task, date, category, priority in self.tasks:
+                        # Loop through each task and its details.
+                        file.write(f"{task},{date},{category},{priority}\n")
+                        # Write the task details to the file, separated by commas.
+            except IOError as e:
+                # Handle file-related errors.
+                QMessageBox.warning(self, "Error", f"Failed to save tasks: {e}")
+                # Show an error message if saving fails.
+
+
+    def load_categories(self):
+        # Initialise an empty set to hold categories.
+        categories = self.get_categories()  # This now only returns categories in use
+        try:
+            # Attempt to open the user's categories file.
+            with open(get_user_categories_file(self.username), "r") as file:
+                # Read each line from the file, stripping whitespace, and add to the set.
+                categories = set(line.strip() for line in file)
+        except FileNotFoundError:
+            # If the file doesn't exist, simply pass (no categories are loaded from file).
+            pass
+        # Iterate over the tasks to extract categories from the third element in each task tuple.
+        for _, _, category, _ in self.tasks:
+            categories.add(category)  # Add the category from the task to the set.
+        # Create a QStringListModel from the list of categories.
+        model = QStringListModel(categories)
+        # Create a QCompleter object for auto-completion in the category entry field.
+        completer = QCompleter() # Set the model for the completer.
+        completer.setModel(model)  # Set the model for the completer.
+        completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)  # Set the completer to be case-insensitive
+        self.category_entry.setCompleter(completer)  # Assign the completer to the category entry field.
+
+
+    def save_category(self, category):
+        # Initialize an empty set to hold categories.
+        categories = set()
+        try:
+            # Attempt to open the user's categories file.
+            with open(get_user_categories_file(self.username), "r") as file:
+                # Read each line from the file, stripping whitespace, and add to the set.
+                categories = set(line.strip() for line in file)
+        except FileNotFoundError:
+            # If the file doesn't exist, simply pass (no categories are loaded from file).
+            pass
+        # Add the new category to the set.
+        categories.add(category)
+        # Open the user's categories file in write mode to save the updated categories.
+        with open(get_user_categories_file(self.username), "w") as file:
+            # Write each category to the file, one per line.
+            for cat in categories:
+                file.write(f"{cat}\n")
+
+
+    def update_categories_file(self):
+        # Get the set of categories currently in use by tasks.
+        used_categories = self.get_used_categories()
+        try:
+            # Attempt to open the user's categories file.
+            with open(get_user_categories_file(self.username), "r") as file:
+                # Read each line from the file, stripping whitespace, and store in a set.
+                existing_categories = set(line.strip() for line in file)
+        except FileNotFoundError:
+            # If the file doesn't exist, initialize an empty set for existing categories.
+            existing_categories = set()
+        # Determine which categories to keep (those that are both existing and in use).
+        categories_to_keep = existing_categories.intersection(used_categories)
+        # Open the user's categories file in write mode to save the updated list.
+        with open(get_user_categories_file(self.username), "w") as file:
+            # Write each category to be kept back to the file, one per line.
+            for category in categories_to_keep:
+                file.write(f"{category}\n")
+
+
+    def load_tasks(self, username):
+        # Load tasks from a file associated with the provided username.
+        self.username = username.lower()  # Convert the username to lowercase and store it.
+        # Update the welcome label to greet the user by their username.
+        self.welcome_label.setText(f"Welcome, {username}!")  
+        # Clear the current task list to prepare for loading new tasks.
+        self.tasks = []
+        try:
+            # Attempt to open the user's task file in read mode.
+            with open(f"{self.username}_tasks.txt", "r") as file:
+                for line in file:
+                    # Split each line into task details: task description, date, category, and priority.
+                    task, date, category, priority = line.strip().split(",")
+                    # Add the parsed task as a tuple to the tasks list.
+                    self.tasks.append((task, date, category, priority))
+            # Refresh the task table to display the loaded tasks.
+            self.update_task_table()
+        except FileNotFoundError:
+            # If the task file doesn't exist, do nothing (tasks list remains empty).
+            pass
+        self.load_categories() # Reload categories for the category entry field.
+        self.archived_tasks = []  # Clear archived tasks when loading new user
+
+
+    def archive_task(self, task):
+        archive_file = get_user_archive_file(self.username)  # Get the archive file for the current user
+        try:
+            with open(archive_file, "a") as file:  # Open the file in append mode
+                file.write(f"{self.username},{task[0]},{task[1]},{task[2]},{task[3]}\n")  # Write the task details to the file
+        except IOError as e:
+            print(f"Error archiving task: {e}")  # Print an error message if something goes wrong
+
+
+    def remove_last_archived_task(self):
+        try:
+            with open(get_user_archive_file(self.username), "r") as file:  # Open the user's archive file in read mode
+                lines = file.readlines()  # Read all lines from the file into a list
+            with open(get_user_archive_file(self.username), "w") as file:  # Open the same file in write mode
+                file.writelines(lines[:-1])  # Write all lines except the last one back to the file, effectively removing the last archived task
+        except FileNotFoundError:
+            pass  # If the file doesn't exist, do nothing
+
+
+    def logout(self):
+        # Handle user logout
+        self.stacked_widget.setCurrentIndex(0)  # Switch to the login page
+        # Clear the archive file
+        archive_file = get_user_archive_file(self.username)
+        if os.path.exists(archive_file):
+            os.remove(archive_file)  # This will delete the contents of the file
+        self.username = None  # Clear the username
+        self.tasks = []  # Clear the tasks list
+        self.task_table.clearContents()  # Clear task table contents
+        self.task_table.setRowCount(0)  # Set row count to 0
+        self.archived_tasks = []  # Clear archived tasks on logout
+
+
+# Class representing the 'Add task' page of the application.
+class TaskDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)  # Initialize the parent class (QDialog)
+        self.init_ui()  # Call the method to initialize the UI components
+
+    def init_ui(self):
+        self.setWindowTitle("Add Task")  # Set the window title to "Add Task"
+        self.resize(600, 400)  # Set the size of the dialog window to 600x400 pixels
+        layout = QVBoxLayout()  # Create a vertical box layout to stack widgets vertically
+
+        # Layout for task input
+        task_layout = QHBoxLayout()  # Create a horizontal layout for task input
+        task_label = QLabel("Task:")  # Create a label with the text "Task:"
+        self.task_entry = QLineEdit()  # Create a text entry field for the task description
+        task_layout.addWidget(task_label)  # Add the task label to the task layout
+        task_layout.addWidget(self.task_entry)  # Add the task entry field to the task layout
+        self.date_picker = QCalendarWidget()  # Create a calendar widget for selecting a date
+
+        # Layout for category input
+        category_layout = QHBoxLayout()  # Create a horizontal layout for category input
+        category_label = QLabel("Category:")  # Create a label with the text "Category:"
+        self.category_entry = QLineEdit()  # Create a text entry field for the category
+        self.category_completer = QCompleter()  # Create a completer to suggest categories
+        self.category_entry.setCompleter(self.category_completer)  # Assign the completer to the category entry field
+        self.category_completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)  # Set the completer to be case-insensitive
+        category_layout.addWidget(category_label)  # Add the category label to the category layout
+        category_layout.addWidget(self.category_entry)  # Add the category entry field to the category layout
+
+        # Layout for priority input
+        priority_layout = QHBoxLayout()  # Create a horizontal layout for priority input
+        priority_label = QLabel("Priority:")  # Create a label with the text "Priority:"
+        self.priority_combo = QComboBox()  # Create a combo box for selecting priority
+        self.priority_combo.addItems(["Low", "Medium", "High"])  # Add priority options to the combo box
+        priority_layout.addWidget(priority_label)  # Add the priority label to the priority layout
+        priority_layout.addWidget(self.priority_combo)  # Add the priority combo box to the priority layout
+
+        button_layout = QHBoxLayout()  # Create a horizontal layout for the dialog buttons
+        add_button = QPushButton("Add")  # Create a button labeled "Add"
+        add_button.clicked.connect(self.accept)  # Connect the "Add" button to the dialog's accept method
+        cancel_button = QPushButton("Cancel")  # Create a button labeled "Cancel"
+        cancel_button.clicked.connect(self.reject)  # Connect the "Cancel" button to the dialog's reject method  
+        button_layout.addWidget(add_button)  # Add the "Add" button to the button layout
+        button_layout.addWidget(cancel_button)  # Add the "Cancel" button to the button layout      
+
+        layout.addLayout(task_layout)  # Add the task input layout to the main layout
+        layout.addWidget(self.date_picker)  # Add the date picker widget to the main layout
+        layout.addLayout(category_layout)  # Add the category input layout to the main layout
+        layout.addLayout(priority_layout)  # Add the priority input layout to the main layout
+        layout.addLayout(button_layout)  # Add the button layout to the main layout
+
+        self.setLayout(layout)  # Set the main layout as the layout for the dialog
+
+
+    def get_task_data(self):
+        # Retrieve the data entered in the dialog and return it
+        task = self.task_entry.text().strip()  # Get the task description and remove leading/trailing whitespace
+        date = self.date_picker.selectedDate().toString("dd/MM/yyyy")  # Get the selected date as a string in "DD/MM/YYYY" format
+        category = self.category_entry.text().strip()  # Get the category and remove leading/trailing whitespace
+        priority = self.priority_combo.currentText()  # Get the selected priority from the combo box
+        self.clear_fields() # Clear input fields after retrieval
+        return task, date, category, priority  # Return the task description, date, category, and priority as a tuple
+
+    def update_category_completer(self, categories):
+        # Update the completer model with a new list of categories
+        model = QStringListModel(categories)  # Create a QStringListModel containing the provided categories
+        self.category_completer.setModel(model)  # Set the model for the category completer
+        self.category_completer.setCompletionMode(QCompleter.CompletionMode.PopupCompletion) # Set the completer to show suggestions in a popup
+
+    def clear_fields(self):
+        # Clear all input fields in the dialog
+        self.task_entry.clear()  # Clear the task entry field
+        self.category_entry.clear()  # Clear the category entry field
+        self.priority_combo.setCurrentIndex(0)  # Reset the priority combo box to its first option ("Low")
+
+# Main function to run the application
+def main():
+    app = QApplication(sys.argv)
+    
+    # Gradient background stylesheet
+    gradient_style = """
+    QWidget {
+        background: qlineargradient(
+        spread:pad
+        x1:0, y1:0,
+        x2:1, y2:1,
+        stop:0 #00526A,
+        stop:1 #00222E
+        );
+    }
+    """
+    
+    stacked_widget = QStackedWidget()  # Create stacked widget for page switching
+    login_page = LoginPage(stacked_widget)  # Create the login page
+    todo_app = ToDoApp(stacked_widget)  # Create the to-do list page
+    stacked_widget.addWidget(login_page)  # Add login page to stacked widget
+    stacked_widget.addWidget(todo_app)  # Add to-do list page to stacked widget
+    stacked_widget.setStyleSheet(gradient_style) # Add gradient colour to the GUI
+    stacked_widget.setCurrentIndex(0)  # Set initial page to login
+    stacked_widget.show()  # Show the application window
+    sys.exit(app.exec())  # Execute the application
+
+if __name__ == "__main__":
+    main()  # Run the main function
+    
